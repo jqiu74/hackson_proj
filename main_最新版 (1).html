@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ごみ出しナビ - UIプロトタイプ</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body {
+            font-family: 'Inter', 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif;
+        }
+        .phone-mockup { max-width: 420px; height: 880px; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .bottom-nav-btn.active svg, .bottom-nav-btn.active span { color: #2563eb; }
+        #search-results-container { min-height: 100px; }
+        .calendar-date-cell { cursor: pointer; }
+        .calendar-date-cell:hover { background-color: #f3f4f6; }
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        #gemini-modal { transition: opacity 0.3s ease; }
+        .gemini-modal-content {
+             transform: scale(0.95);
+             transition: transform 0.3s ease;
+        }
+    </style>
+</head>
+<body class="bg-gray-200 flex items-center justify-center min-h-screen p-4">
+    <div class="phone-mockup w-full bg-white rounded-3xl border-8 border-gray-800 shadow-2xl overflow-hidden flex flex-col">
+        
+        <header class="bg-white border-b border-gray-200 p-4 flex justify-between items-center flex-shrink-0">
+            <h1 class="text-xl font-bold text-gray-800">ごみ出しナビ</h1>
+            <button class="flex items-center space-x-1 text-gray-600" id="lang-button">
+                <i data-lucide="globe" class="w-5 h-5"></i>
+                <span class="text-sm">日本語</span>
+            </button>
+        </header>
+        
+        <main class="flex-grow overflow-y-auto bg-gray-50">
+            <div id="home" class="tab-content active p-6">
+                <div class="text-center mb-6">
+                    <p class="text-sm text-gray-500">2025年10月5日 (日)</p>
+                    <p class="text-lg font-semibold text-gray-800">札幌市中央区</p>
+                </div>
+                
+                <div id="reminder-card" class="bg-yellow-50 border border-yellow-300 rounded-xl p-3 mb-6 shadow-sm hidden">
+                    <div class="flex items-center space-x-3">
+                        <i data-lucide="bell" class="w-6 h-6 text-yellow-700 flex-shrink-0"></i>
+                        <div>
+                            <p class="font-bold text-yellow-800" id="reminder-title">明日のお知らせです</p>
+                            <p class="text-sm text-yellow-700" id="reminder-message">収集日です。忘れずに！</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-blue-100 border-2 border-blue-300 rounded-xl p-4 mb-4 shadow-sm" id="today-card">
+                    <h2 class="font-bold text-blue-800 mb-2">今日のごみ</h2>
+                    <div class="flex items-center space-x-4">
+                        <img src="https://placehold.co/64x64/3b82f6/ffffff?text=資" alt="資源ごみ" class="rounded-lg">
+                        <div>
+                            <p class="text-xl font-bold text-gray-900">資源ごみ</p>
+                            <p class="text-sm text-gray-600">朝8時30分までに出してください</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-green-100 border-2 border-green-300 rounded-xl p-4 mb-8 shadow-sm" id="tomorrow-card">
+                     <h2 class="font-bold text-green-800 mb-2">明日のごみ</h2>
+                     <div class="flex items-center space-x-4">
+                        <img src="https://placehold.co/64x64/22c55e/ffffff?text=燃" alt="燃えるごみ" class="rounded-lg">
+                        <div>
+                            <p class="text-xl font-bold text-gray-900">燃やせるごみ</p>
+                            <p class="text-sm text-gray-600">生ごみ、紙くずなど</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div>
+                    <h3 class="font-semibold text-gray-700 mb-3 text-center">分別に迷ったら？</h3>
+                    <div class="relative mb-3">
+                        <input type="text" id="home-search-input" placeholder="品名を入力 (例: 電池)" class="w-full pl-10 pr-4 py-3 rounded-lg border-2 border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"></i>
+                    </div>
+                    <button id="ai-vision-btn" class="w-full flex items-center justify-center bg-gray-800 text-white font-semibold py-3 rounded-lg hover:bg-gray-700 transition duration-300 shadow">
+                        <i data-lucide="sparkles" class="w-5 h-5 mr-2"></i>
+                        <span id="ai-vision-btn-text">写真でAI分別</span>
+                    </button>
+                    <input type="file" id="image-upload" class="hidden" accept="image/*">
+                </div>
+            </div>
+
+            <div id="search" class="tab-content p-6">
+                <h2 class="text-2xl font-bold text-gray-800 mb-4">分別を調べる</h2>
+                <div class="relative mb-6">
+                    <input type="text" id="search-input" placeholder="例: スプレー缶、乾電池" class="w-full pl-10 pr-4 py-3 rounded-lg border-2 border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"></i>
+                </div>
+                
+                <h3 class="font-semibold text-gray-600 mb-3">主な分類から探す</h3>
+                <div class="grid grid-cols-2 gap-4" id="category-list">
+                    <div class="category-item bg-white p-4 rounded-lg border border-gray-200 shadow-sm text-center cursor-pointer hover:shadow-lg transition duration-150" data-category="燃やせるごみ">
+                        <img src="https://placehold.co/48x48/f87171/ffffff?text=燃" alt="燃えるごみ" class="mx-auto mb-2 rounded-md">
+                        <p class="font-semibold text-gray-700">燃やせるごみ</p>
+                    </div>
+                    <div class="category-item bg-white p-4 rounded-lg border border-gray-200 shadow-sm text-center cursor-pointer hover:shadow-lg transition duration-150" data-category="燃やせないごみ">
+                        <img src="https://placehold.co/48x48/fbbf24/ffffff?text=不" alt="燃えないごみ" class="mx-auto mb-2 rounded-md">
+                        <p class="font-semibold text-gray-700">燃やせないごみ</p>
+                    </div>
+                    <div class="category-item bg-white p-4 rounded-lg border border-gray-200 shadow-sm text-center cursor-pointer hover:shadow-lg transition duration-150" data-category="資源ごみ">
+                        <img src="https://placehold.co/48x48/34d399/ffffff?text=資" alt="資源ごみ" class="mx-auto mb-2 rounded-md">
+                        <p class="font-semibold text-gray-700">資源ごみ</p>
+                    </div>
+                    <div class="category-item bg-white p-4 rounded-lg border border-gray-200 shadow-sm text-center cursor-pointer hover:shadow-lg transition duration-150" data-category="粗大ごみ">
+                        <img src="https://placehold.co/48x48/93c5fd/ffffff?text=粗" alt="粗大ごみ" class="mx-auto mb-2 rounded-md">
+                        <p class="font-semibold text-gray-700">粗大ごみ</p>
+                    </div>
+                </div>
+
+                <div class="mt-8" id="search-results-container">
+                    <p class="text-gray-500 text-center" id="search-placeholder">💡 品名を入力するか、上の分類をタップしてください。</p>
+                </div>
+            </div>
+
+            <div id="calendar" class="tab-content p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <button class="p-2 rounded-full hover:bg-gray-200"><i data-lucide="chevron-left" class="w-6 h-6"></i></button>
+                    <h2 class="text-2xl font-bold text-gray-800">2025年 10月</h2>
+                    <button class="p-2 rounded-full hover:bg-gray-200"><i data-lucide="chevron-right" class="w-6 h-6"></i></button>
+                </div>
+                <div class="grid grid-cols-7 text-center text-sm font-semibold text-gray-500 mb-2">
+                    <div>日</div><div>月</div><div>火</div><div>水</div><div>木</div><div>金</div><div>土</div>
+                </div>
+                <div class="grid grid-cols-7 text-center gap-1">
+                </div>
+                <div class="mt-6 space-y-2">
+                    <div class="flex items-center"><div class="w-4 h-4 rounded bg-red-200 mr-2"></div><span class="text-sm">燃やせるごみ</span></div>
+                    <div class="flex items-center"><div class="w-4 h-4 rounded bg-yellow-200 mr-2"></div><span class="text-sm">燃やせないごみ</span></div>
+                    <div class="flex items-center"><div class="w-4 h-4 rounded bg-green-200 mr-2"></div><span class="text-sm">資源ごみ</span></div>
+                    <div class="flex items-center"><div class="w-4 h-4 rounded bg-blue-100 border border-blue-400 mr-2"></div><span class="text-sm">今日</span></div>
+                </div>
+            </div>
+        </main>
+        
+        <nav class="bg-white border-t border-gray-200 flex justify-around flex-shrink-0">
+            <button class="bottom-nav-btn active flex-1 flex flex-col items-center justify-center p-3 text-gray-500 hover:bg-gray-100" data-target="home">
+                <i data-lucide="home" class="w-6 h-6 mb-1"></i>
+                <span class="text-xs">ホーム</span>
+            </button>
+            <button class="bottom-nav-btn flex-1 flex flex-col items-center justify-center p-3 text-gray-500 hover:bg-gray-100" data-target="search" id="search-tab-btn">
+                <i data-lucide="search" class="w-6 h-6 mb-1"></i>
+                <span class="text-xs">分別検索</span>
+            </button>
+            <button class="bottom-nav-btn flex-1 flex flex-col items-center justify-center p-3 text-gray-500 hover:bg-gray-100" data-target="calendar">
+                <i data-lucide="calendar-days" class="w-6 h-6 mb-1"></i>
+                <span class="text-xs">カレンダー</span>
+            </button>
+        </nav>
+    </div>
+
+    <div id="lang-modal" class="fixed inset-0 bg-gray-900 bg-opacity-70 flex items-center justify-center hidden z-50 p-4">
+        <div class="bg-white p-6 rounded-xl shadow-2xl w-full max-w-xs">
+            <h3 class="text-xl font-bold mb-5 text-gray-800">言語を選択</h3>
+            <ul id="lang-list" class="space-y-3">
+                <li class="lang-option p-3 cursor-pointer rounded-lg hover:bg-blue-50 text-gray-700 font-semibold" data-lang="ja">日本語</li>
+                <li class="lang-option p-3 cursor-pointer rounded-lg hover:bg-blue-50 text-gray-700 font-semibold" data-lang="zh">中文</li>
+                <li class="lang-option p-3 cursor-pointer rounded-lg hover:bg-blue-50 text-gray-700 font-semibold" data-lang="en">English</li>
+            </ul>
+            <button id="close-lang-modal-btn" class="mt-6 w-full py-2 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300 transition">閉じる</button>
+        </div>
+    </div>
+
+    <div id="gemini-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 opacity-0 pointer-events-none">
+        <div class="gemini-modal-content bg-white rounded-2xl shadow-xl w-full max-w-md p-6 relative">
+            <button id="close-gemini-modal-btn" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
+                <i data-lucide="x" class="w-6 h-6"></i>
+            </button>
+            <div id="modal-content">
+                <div id="modal-loading" class="text-center">
+                    <div class="loader w-12 h-12 rounded-full border-4 border-gray-200 !border-t-blue-500 mx-auto mb-4"></div>
+                    <p class="font-semibold text-gray-700">AIが考えています...</p>
+                    <p class="text-sm text-gray-500">少々お待ちください</p>
+                </div>
+                <div id="modal-result" class="hidden">
+                    <h3 id="modal-title" class="text-xl font-bold text-gray-800 mb-4 flex items-center"></h3>
+                    <div id="modal-body" class="text-gray-600 space-y-3 prose max-w-none"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+        lucide.createIcons();
+        
+        const translations = {
+            'ja': { 'app_title': 'ごみ出しナビ', 'current_lang': '日本語', 'tab_home': 'ホーム', 'tab_search': '分別検索', 'tab_calendar': 'カレンダー', 'today_gomi': '今日のごみ', 'tomorrow_gomi': '明日のごみ', 'search_tip': '分別に迷ったら？', 'search_placeholder_home': '品名を入力 (例: 電池)', 'search_title': '分別を調べる', 'search_placeholder': '例: スプレー缶、乾電池', 'search_category_title': '主な分類から探す', 'search_photo': '写真でAI分別', 'calendar_legend_combustible': '燃やせるごみ', 'calendar_legend_noncombustible': '燃やせないごみ', 'calendar_legend_resource': '資源ごみ', 'calendar_legend_today': '今日', 'home_location': '札幌市中央区', 'home_no_collection': '収集はありません。😌', 'home_time': '朝8時30分までに出してください', 'unit_type': '種類', 'reminder_title': '明日のお知らせです', 'reminder_msg_prefix': '', 'reminder_msg_suffix': 'の日です。忘れずに！', 'result_found_prefix': '「', 'result_found_suffix': '」の検索結果', 'how_to_dispose': '出し方', 'next_collection_day': '次の収集日', 'category_example': 'の例', 'searching': '検索中...', 'api_error': '検索中にエラーが発生しました。時間をおいて再度お試しください。' },
+            'en': { 'app_title': 'Garbage Guide', 'current_lang': 'English', 'tab_home': 'Home', 'tab_search': 'Sorting Search', 'tab_calendar': 'Calendar', 'today_gomi': "Today's Garbage", 'tomorrow_gomi': "Tomorrow's Garbage", 'search_tip': 'Lost on sorting?', 'search_placeholder_home': 'Enter item (e.g.: Battery)', 'search_title': 'Find Sorting Rules', 'search_placeholder': 'e.g.: Spray can, Battery', 'search_category_title': 'Search by Category', 'search_photo': 'AI Sort by Photo', 'calendar_legend_combustible': 'Burnable', 'calendar_legend_noncombustible': 'Non-Burnable', 'calendar_legend_resource': 'Recyclables', 'calendar_legend_today': 'Today', 'home_location': 'Sapporo Chuo Ward', 'home_no_collection': 'No collection today.😌', 'home_time': 'Put out by 8:30 AM', 'unit_type': 'types', 'reminder_title': "Tomorrow's Reminder", 'reminder_msg_prefix': 'It is the day for ', 'reminder_msg_suffix': '. Don\'t forget!', 'result_found_prefix': 'Search results for "', 'result_found_suffix': '"', 'how_to_dispose': 'How to Dispose', 'next_collection_day': 'Next Collection Day', 'category_example': ' Example', 'searching': 'Searching...', 'api_error': 'An error occurred. Please try again later.' },
+            'zh': { 'app_title': '垃圾分类导航', 'current_lang': '中文', 'tab_home': '首页', 'tab_search': '分类查询', 'tab_calendar': '日历', 'today_gomi': '今日垃圾', 'tomorrow_gomi': '明日垃圾', 'search_tip': '不确定如何分类？', 'search_placeholder_home': '输入物品名称 (例: 电池)', 'search_title': '查询分类方法', 'search_placeholder': '例: 喷雾罐、干电池', 'search_category_title': '按主要分类查询', 'search_photo': 'AI拍照分类', 'calendar_legend_combustible': '可燃垃圾', 'calendar_legend_noncombustible': '不可燃垃圾', 'calendar_legend_resource': '资源垃圾', 'calendar_legend_today': '今天', 'home_location': '札幌市中央区', 'home_no_collection': '今日无收集。😌', 'home_time': '请在早上8点30分前投放', 'unit_type': '种类', 'reminder_title': '明日提醒通知', 'reminder_msg_prefix': '明天是 ', 'reminder_msg_suffix': ' 的收集日，请不要忘记！', 'result_found_prefix': '“', 'result_found_suffix': '”的搜索结果', 'how_to_dispose': '投放方法', 'next_collection_day': '下次收集日', 'category_example': '的示例', 'searching': '正在搜索...', 'api_error': '搜索时发生错误，请稍后重试。' }
+        };
+        
+        const prompts = {
+            'ja': {
+                'system_prompt': 'あなたは日本の「札幌市中央区」のゴミ分別案内チャットボットです。ユーザーが入力した品物について、分別方法と注意点を簡潔に、分かりやすく、マークダウン形式で箇条書きで教えてください。',
+                'user_prompt_suffix': 'の捨て方を教えてください。',
+                'vision_prompt': 'これは何という品目ですか？日本の札幌市中央区のルールに基づいて、分別区分と出し方の注意点を簡潔に教えてください。'
+            },
+            'en': {
+                'system_prompt': 'You are a garbage sorting guide chatbot for Chuo Ward, Sapporo City, Japan. For the item the user enters, please briefly and clearly explain the sorting method and important points in a markdown bulleted list format.',
+                'user_prompt_suffix': ' - how should I dispose of this?',
+                'vision_prompt': 'What is this item? Based on the rules of Chuo Ward, Sapporo City, Japan, please briefly explain its sorting category and how to dispose of it.'
+            },
+            'zh': {
+                'system_prompt': '你是一个日本札幌市中央区的垃圾分类指南聊天机器人。对于用户输入的物品，请以Markdown项目列表的形式，简洁明了地说明其分类方法和注意事项。',
+                'user_prompt_suffix': '应该如何丢弃？',
+                'vision_prompt': '这是什么物品？请根据日本札幌市中央区的规定，简洁地说明它的分类类别和丢弃时的注意事项。'
+            }
+        };
+
+        let currentLang = 'ja'; 
+
+        const wasteData = [
+            { name: { ja: "ペットボトル", en: "PET bottle", zh: "塑料瓶" }, category: "資源ごみ", iconColor: "34d399", howToDispose: { ja: "1. キャップとラベルをはずす\n2. 中を軽くすすぐ\n3. つぶして出す", en: "1. Remove cap and label\n2. Rinse lightly inside\n3. Crush and dispose", zh: "1. 取下瓶盖和标签\n2. 简单冲洗内部\n3. 压扁后投放" }, nextCollection: "10月5日 (日)" },
+            { name: { ja: "乾電池", en: "Battery", zh: "干电池" }, category: "燃やせないごみ", iconColor: "fbbf24", howToDispose: { ja: "透明な袋に入れる。他のごみとは別にする。ボタン電池は販売店へ。", en: "Put in a clear bag, separate from other garbage. Button batteries must go to retailers.", zh: "放入透明袋中，与其他垃圾分开。纽扣电池请送至零售店。" }, nextCollection: "10月10日 (金)" },
+            { name: { ja: "生ごみ", en: "Kitchen Waste", zh: "厨余垃圾" }, category: "燃やせるごみ", iconColor: "f87171", howToDispose: { ja: "水をよく切り、指定の袋に入れて出す。", en: "Drain water thoroughly and dispose in the designated bag.", zh: "充分沥干水分，放入指定的垃圾袋内。" }, nextCollection: "10月8日 (水)" },
+            { name: { ja: "小型家具", en: "Small Furniture", zh: "小型家具" }, category: "粗大ごみ", iconColor: "93c5fd", howToDispose: { ja: "事前に電話で申し込み、処理券を貼って出す。", en: "Apply by phone in advance, attach a processing ticket, and put it out.", zh: "需提前电话预约，贴上处理券后投放。" }, nextCollection: "要予約" },
+        ];
+
+        const areaSchedule = {
+            "燃やせるごみ": { color: "red", icon: "燃", days: [3, 6] }, 
+            "資源ごみ": { color: "green", icon: "資", days: [0] }, 
+            "燃やせないごみ": { color: "yellow", icon: "不", monthly: [{ dayOfWeek: 5, weekOfMonth: 2 }] }, 
+            "粗大ごみ": { color: "blue", icon: "粗", days: [] },
+        };
+        
+        const calendarContainer = document.querySelector('#calendar .grid:nth-child(3)');
+        const monthTitle = document.querySelector('#calendar h2');
+        const prevMonthBtn = document.querySelector('#calendar button:first-child');
+        const nextMonthBtn = document.querySelector('#calendar button:last-child');
+        const TODAY = new Date();
+        let currentMonth = TODAY.getMonth(); 
+        let currentYear = TODAY.getFullYear(); 
+
+        const searchInput = document.getElementById('search-input');
+        const homeSearchInput = document.getElementById('home-search-input');
+        const searchResultsContainer = document.getElementById('search-results-container');
+        const searchTabButton = document.getElementById('search-tab-btn');
+        const searchPlaceholder = document.getElementById('search-placeholder');
+        const navButtons = document.querySelectorAll('.bottom-nav-btn');
+        const tabContents = document.querySelectorAll('.tab-content');
+        const todayCard = document.getElementById('today-card');
+        const tomorrowCard = document.getElementById('tomorrow-card');
+        
+        const langModal = document.getElementById('lang-modal');
+        const closeLangModalBtn = document.getElementById('close-lang-modal-btn');
+        const langOptions = document.querySelectorAll('.lang-option');
+        const langButton = document.getElementById('lang-button');
+        
+        const geminiModal = document.getElementById('gemini-modal');
+        const geminiModalContent = document.querySelector('.gemini-modal-content');
+        const closeGeminiModalBtn = document.getElementById('close-gemini-modal-btn');
+        const modalLoading = document.getElementById('modal-loading');
+        const modalResult = document.getElementById('modal-result');
+        const modalTitle = document.getElementById('modal-title');
+        const modalBody = document.getElementById('modal-body');
+        const aiVisionBtn = document.getElementById('ai-vision-btn');
+        const imageUpload = document.getElementById('image-upload');
+
+        const apiKey = "api_key";
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+
+        async function handleSearchWithAPI(query) {
+            const lang = translations[currentLang];
+            searchResultsContainer.innerHTML = `<div class="text-center p-4"><div class="loader"></div><p class="text-gray-600">${lang.searching}</p></div>`;
+            searchPlaceholder.style.display = 'none';
+
+            const selectedPrompts = prompts[currentLang];
+            const systemPrompt = selectedPrompts.system_prompt;
+            const userQuery = `${query}${selectedPrompts.user_prompt_suffix}`;
+
+            const payload = {
+                contents: [{ parts: [{ text: userQuery }] }],
+                systemInstruction: { parts: [{ text: systemPrompt }] },
+            };
+            
+            try {
+                const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                if (!response.ok) throw new Error(`API error: ${response.status}`);
+                const result = await response.json();
+                const candidate = result.candidates?.[0];
+                if (candidate && candidate.content?.parts?.[0]?.text) {
+                    renderAPIResult(candidate.content.parts[0].text, query);
+                } else {
+                    throw new Error("Invalid API response format");
+                }
+            } catch (error) {
+                console.error("API call failed:", error);
+                searchResultsContainer.innerHTML = `<div class="bg-red-50 p-4 rounded-xl border border-red-200"><p class="text-red-700 font-semibold">${lang.api_error}</p></div>`;
+            }
+        }
+
+        function renderAPIResult(apiResponse, query) {
+            const lang = translations[currentLang];
+            const formattedResponse = apiResponse.replace(/\n/g, '<br>').replace(/(\*|\-)\s/g, '</li><li class="mt-1">').replace(/^<\/li>/, '');
+            searchResultsContainer.innerHTML = `<div class="bg-white p-4 rounded-xl border border-gray-200 shadow-lg"><p class="text-sm text-gray-500 mb-3">${lang['result_found_prefix']}${query}${lang['result_found_suffix']}</p><div class="prose prose-sm max-w-none text-gray-800"><ul><li class="mt-1">${formattedResponse}</li></ul></div></div>`;
+        }
+
+        function renderLocalExampleResult(result, source, isCategorySearch) { 
+            const lang = translations[currentLang];
+            const categoryName = result.category;
+            const categoryDisplayNames = { '燃やせるごみ': lang['calendar_legend_combustible'], '燃やせないごみ': lang['calendar_legend_noncombustible'], '資源ごみ': lang['calendar_legend_resource'], '粗大ごみ': lang['calendar_legend_combustible'] === '可燃垃圾' ? '大型垃圾' : lang['calendar_legend_combustible'] === 'Burnable' ? 'Oversized Waste' : '粗大ごみ' };
+            const categoryDisplayName = categoryDisplayNames[categoryName] || categoryName;
+
+            searchResultsContainer.innerHTML = `<div class="bg-white p-4 rounded-xl border border-gray-200 shadow-lg"><p class="text-sm text-gray-500 mb-2">${isCategorySearch ? `${categoryDisplayName}${lang['category_example']}` : `${lang['result_found_prefix']}${source}${lang['result_found_suffix']}`}</p><div class="flex items-start space-x-4"><img src="https://placehold.co/48x48/${result.iconColor}/ffffff?text=${areaSchedule[categoryName].icon}" alt="${categoryDisplayName}" class="rounded-md flex-shrink-0"><div><h4 class="text-lg font-bold text-gray-800">${result.name[currentLang] || result.name['ja']}</h4><p class="text-sm text-gray-600 mt-1 mb-3">${categoryDisplayName}</p><p class="text-gray-700 mt-2 whitespace-pre-line"><span class="font-semibold">${lang['how_to_dispose']}:</span><br>${result.howToDispose[currentLang] || result.howToDispose['ja']}</p><p class="text-gray-700 mt-2"><span class="font-semibold">${lang['next_collection_day']}:</span><br>${result.nextCollection}</p></div></div></div>`;
+            searchPlaceholder.style.display = 'none';
+        }
+        
+        function handleSearch(query, isCategorySearch = false) { 
+            const trimmedQuery = query.trim();
+            if (!trimmedQuery) {
+                searchResultsContainer.innerHTML = '';
+                searchPlaceholder.style.display = 'block';
+                return;
+            }
+            if (isCategorySearch) {
+                const result = wasteData.find(item => item.category === query);
+                if (result) renderLocalExampleResult(result, query, true);
+            } else {
+                handleSearchWithAPI(trimmedQuery);
+            }
+        }
+        
+        function performHomeSearch(query) {
+             if (query.trim()) {
+                navButtons.forEach(btn => btn.classList.toggle('active', btn.dataset.target === 'search'));
+                tabContents.forEach(content => content.classList.toggle('active', content.id === 'search'));
+                searchInput.value = query;
+                handleSearch(query);
+            }
+        }
+        
+        function showCategoryDetail(category) {
+            navButtons.forEach(btn => btn.classList.toggle('active', btn.dataset.target === 'search'));
+            tabContents.forEach(content => content.classList.toggle('active', content.id === 'search'));
+            const categoryDisplayNames = { '燃やせるごみ': translations[currentLang]['calendar_legend_combustible'], '燃やせないごみ': translations[currentLang]['calendar_legend_noncombustible'], '資源ごみ': translations[currentLang]['calendar_legend_resource'], '粗大ごみ': lang['calendar_legend_combustible'] === '可燃垃圾' ? '大型垃圾' : lang['calendar_legend_combustible'] === 'Burnable' ? 'Oversized Waste' : '粗大ごみ' };
+            searchInput.value = categoryDisplayNames[category] || category; 
+            handleSearch(category, true);
+            document.querySelector('main').scrollTo(0, 0);
+        }
+
+        const showGeminiModal = (isLoading = true) => {
+            geminiModal.classList.remove('opacity-0', 'pointer-events-none');
+            setTimeout(() => geminiModalContent.classList.remove('scale-95'), 10);
+            modalLoading.style.display = isLoading ? 'block' : 'none';
+            modalResult.style.display = isLoading ? 'none' : 'block';
+        };
+
+        const hideGeminiModal = () => {
+            geminiModalContent.classList.add('scale-95');
+            geminiModal.classList.add('opacity-0');
+            setTimeout(() => geminiModal.classList.add('pointer-events-none'), 300);
+        };
+        
+        async function handleImageSearchWithAPI(file) {
+            showGeminiModal(true);
+
+            const reader = new FileReader();
+            reader.onloadend = async () => {
+                const base64Data = reader.result.split(',')[1];
+                const selectedPrompts = prompts[currentLang];
+                const prompt = selectedPrompts.vision_prompt;
+
+                const payload = {
+                    contents: [{
+                        parts: [
+                            { text: prompt },
+                            { inlineData: { mimeType: file.type, data: base64Data } }
+                        ]
+                    }]
+                };
+
+                try {
+                    const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                    if (!response.ok) throw new Error(`API Error: ${response.status}`);
+                    const result = await response.json();
+                    const resultText = result.candidates[0].content.parts[0].text;
+                    
+                    modalTitle.innerHTML = `<i data-lucide="camera" class="w-6 h-6 mr-2 text-purple-500"></i> AIによる写真分別の結果`;
+                    modalBody.innerHTML = resultText.replace(/\n/g, '<br>');
+                    showGeminiModal(false);
+                    lucide.createIcons();
+
+                } catch (error) {
+                    console.error("Gemini Vision API call failed:", error);
+                    modalTitle.innerHTML = `<i data-lucide="alert-triangle" class="w-6 h-6 mr-2 text-red-500"></i> エラー`;
+                    modalBody.innerHTML = "AIの応答取得に失敗しました。時間をおいて再度お試しください。";
+                    showGeminiModal(false);
+                    lucide.createIcons();
+                }
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function calculateSchedule(year, month) {
+             const schedule = {};
+             const firstDay = new Date(year, month, 1);
+             const lastDay = new Date(year, month + 1, 0).getDate(); 
+            for (let date = 1; date <= lastDay; date++) {
+                const d = new Date(year, month, date);
+                const dayOfWeek = d.getDay(); 
+                const dayOfMonth = d.getDate();
+                const weekOfMonth = Math.ceil((dayOfMonth + firstDay.getDay()) / 7);
+                schedule[date] = []; 
+                for (const type in areaSchedule) {
+                    const rule = areaSchedule[type];
+                    if (rule.days && rule.days.includes(dayOfWeek)) schedule[date].push({ type: type, icon: rule.icon, color: rule.color });
+                    if (rule.monthly) {
+                        for (const mRule of rule.monthly) {
+                            if (mRule.dayOfWeek === dayOfWeek && mRule.weekOfMonth === weekOfMonth) schedule[date].push({ type: type, icon: rule.icon, color: rule.color });
+                        }
+                    }
+                }
+            }
+            return schedule;
+        }
+
+        function getScheduleForDate(date, schedule) {
+            if (date.getMonth() !== currentMonth || date.getFullYear() !== currentYear) {
+                const targetSchedule = calculateSchedule(date.getFullYear(), date.getMonth());
+                return targetSchedule[date.getDate()] || [];
+            }
+            return schedule[date.getDate()] || [];
+        }
+
+        function updateHomeSchedule(currentMonthSchedule) {
+            const tomorrow = new Date(TODAY);
+            tomorrow.setDate(TODAY.getDate() + 1);
+            const todayCollections = getScheduleForDate(TODAY, currentMonthSchedule);
+            const tomorrowCollections = getScheduleForDate(tomorrow, currentMonthSchedule);
+            const lang = translations[currentLang];
+            const categoryDisplayNames = { '燃やせるごみ': lang['calendar_legend_combustible'], '燃やせないごみ': lang['calendar_legend_noncombustible'], '資源ごみ': lang['calendar_legend_resource'], '粗大ごみ': lang['calendar_legend_combustible'] === '可燃垃圾' ? '大型垃圾' : lang['calendar_legend_combustible'] === 'Burnable' ? 'Oversized Waste' : '粗大ごみ' };
+
+            if (todayCollections.length > 0) {
+                const firstType = todayCollections[0];
+                const displayName = categoryDisplayNames[firstType.type] || firstType.type;
+                todayCard.innerHTML = `<h2 class="font-bold text-blue-800 mb-2">${lang.today_gomi}</h2><div class="flex items-center space-x-4"><img src="https://placehold.co/64x64/${areaSchedule[firstType.type].color}/ffffff?text=${firstType.icon}" alt="${displayName}" class="rounded-lg"><div><p class="text-xl font-bold text-gray-900">${displayName}</p><p class="text-sm text-gray-600">${lang.home_time}</p>${todayCollections.length > 1 ? `<p class="text-xs text-gray-500 mt-1">+ その他 ${todayCollections.length - 1}${lang.unit_type}</p>` : ''}</div></div>`;
+                todayCard.classList.replace('bg-gray-200', 'bg-blue-100');
+            } else {
+                todayCard.innerHTML = `<h2 class="font-bold text-gray-700 mb-2">${lang.today_gomi}</h2><p class="text-lg text-gray-600">${lang.home_no_collection}</p>`;
+                todayCard.classList.replace('bg-blue-100', 'bg-gray-200');
+            }
+
+            if (tomorrowCollections.length > 0) {
+                const firstType = tomorrowCollections[0];
+                const displayName = categoryDisplayNames[firstType.type] || firstType.type;
+                tomorrowCard.innerHTML = `<h2 class="font-bold text-green-800 mb-2">${lang.tomorrow_gomi}</h2><div class="flex items-center space-x-4"><img src="https://placehold.co/64x64/${areaSchedule[firstType.type].color}/ffffff?text=${firstType.icon}" alt="${displayName}" class="rounded-lg"><div><p class="text-xl font-bold text-gray-900">${displayName}</p><p class="text-sm text-gray-600">${displayName}${lang.reminder_msg_suffix.replace('、', '').replace('。', '').replace('.', '')}</p>${tomorrowCollections.length > 1 ? `<p class="text-xs text-gray-500 mt-1">+ その他 ${tomorrowCollections.length - 1}${lang.unit_type}</p>` : ''}</div></div>`;
+                tomorrowCard.classList.replace('bg-gray-200', 'bg-green-100');
+            } else {
+                tomorrowCard.innerHTML = `<h2 class="font-bold text-gray-700 mb-2">${lang.tomorrow_gomi}</h2><p class="text-lg text-gray-600">${lang.home_no_collection}</p>`;
+                tomorrowCard.classList.replace('bg-green-100', 'bg-gray-200');
+            }
+        }
+
+        function checkAndShowReminder() {
+            const reminderCard = document.getElementById('reminder-card');
+            const reminderMessage = document.getElementById('reminder-message');
+            const tomorrow = new Date();
+            tomorrow.setDate(TODAY.getDate() + 1);
+            const tomorrowSchedule = calculateSchedule(tomorrow.getFullYear(), tomorrow.getMonth());
+            const collections = tomorrowSchedule[tomorrow.getDate()] || [];
+            if (collections.length > 0) {
+                const lang = translations[currentLang];
+                const categoryDisplayNames = { '燃やせるごみ': lang['calendar_legend_combustible'], '燃やせないごみ': lang['calendar_legend_noncombustible'], '資源ごみ': lang['calendar_legend_resource'], '粗大ごみ': lang['calendar_legend_combustible'] === '可燃垃圾' ? '大型垃圾' : lang['calendar_legend_combustible'] === 'Burnable' ? 'Oversized Waste' : '粗大ごみ' };
+                let messageTypes = collections.map(item => categoryDisplayNames[item.type] || item.type).join(currentLang === 'zh' ? '、' : ', '); 
+                document.getElementById('reminder-title').textContent = lang.reminder_title;
+                reminderMessage.textContent = `${lang.reminder_msg_prefix}${messageTypes}${lang.reminder_msg_suffix}`;
+                reminderCard.classList.remove('hidden');
+            } else {
+                reminderCard.classList.add('hidden');
+            }
+        }
+
+        function renderCalendar(year, month, collectionSchedule) {
+            monthTitle.textContent = `${year}年 ${month + 1}月`;
+            calendarContainer.innerHTML = ''; 
+            const firstDay = new Date(year, month, 1);
+            const lastDate = new Date(year, month + 1, 0).getDate();
+            const startDayOfWeek = firstDay.getDay(); 
+            const prevMonthLastDate = new Date(year, month, 0).getDate();
+            for (let i = startDayOfWeek - 1; i >= 0; i--) {
+                calendarContainer.innerHTML += `<div class="text-gray-400 py-2">${prevMonthLastDate - i}</div>`;
+            }
+
+            for (let date = 1; date <= lastDate; date++) {
+                let classes = 'py-2 relative';
+                let dataCategory = '';
+                if (date === TODAY.getDate() && month === TODAY.getMonth() && year === TODAY.getFullYear()) {
+                    classes += ' bg-blue-100 rounded-lg border border-blue-400 font-bold'; 
+                    const dayNames = ['日','月','火','水','木','金','土'];
+                    document.querySelector('#home .text-sm.text-gray-500').textContent = `${year}年${month + 1}月${date}日 (${dayNames[TODAY.getDay()]})`;
+                }
+                let trashMarks = '';
+                if (collectionSchedule[date] && collectionSchedule[date].length > 0) {
+                    dataCategory = collectionSchedule[date][0].type;
+                    trashMarks = collectionSchedule[date].map(item => {
+                        const rule = areaSchedule[item.type];
+                        const colorClass = rule.color === 'red' ? 'bg-red-200 text-red-800' : rule.color === 'green' ? 'bg-green-200 text-green-800' : rule.color === 'yellow' ? 'bg-yellow-200 text-yellow-800' : 'bg-blue-200 text-blue-800';
+                        return `<div class="text-xs mt-1 px-1 py-0.5 ${colorClass} rounded mx-auto w-6">${rule.icon}</div>`;
+                    }).join('');
+                    classes += ' calendar-date-cell'; 
+                }
+                calendarContainer.innerHTML += `<div class="${classes}" data-category="${dataCategory}">${date}${trashMarks}</div>`;
+            }
+            
+            const totalDaysRendered = startDayOfWeek + lastDate;
+            const remainingSlots = 7 - (totalDaysRendered % 7);
+            if (remainingSlots < 7) {
+                for (let i = 1; i <= remainingSlots; i++) calendarContainer.innerHTML += `<div class="text-gray-400 py-2">${i}</div>`;
+            }
+            attachCalendarClickEvents();
+        }
+        
+        function attachCalendarClickEvents() {
+            document.querySelectorAll('.calendar-date-cell').forEach(cell => {
+                cell.addEventListener('click', (e) => {
+                    const category = e.currentTarget.getAttribute('data-category');
+                    if (category) showCategoryDetail(category);
+                });
+            });
+        }
+
+        function updateUIStrings() {
+            const lang = translations[currentLang];
+            document.querySelector('header h1').textContent = lang['app_title'];
+            document.querySelector('header button span').textContent = lang['current_lang'];
+            document.querySelector('[data-target="home"] span').textContent = lang['tab_home'];
+            document.querySelector('[data-target="search"] span').textContent = lang['tab_search'];
+            document.querySelector('[data-target="calendar"] span').textContent = lang['tab_calendar'];
+            document.querySelector('#home .text-lg.font-semibold').textContent = lang['home_location'];
+            document.querySelector('#home h3').textContent = lang['search_tip'];
+            document.getElementById('home-search-input').placeholder = lang['search_placeholder_home'];
+            document.getElementById('ai-vision-btn-text').textContent = lang['search_photo'];
+            document.querySelector('#search h2').textContent = lang['search_title'];
+            document.getElementById('search-input').placeholder = lang['search_placeholder'];
+            document.querySelector('#search h3').textContent = lang['search_category_title'];
+            document.getElementById('search-placeholder').textContent = currentLang === 'ja' ? '💡 品名を入力するか、上の分類をタップしてください。' : currentLang === 'en' ? '💡 Enter the item name or tap a category above.' : '💡 请输入物品名称或点击上方分類。';
+            
+            const categoryItems = document.querySelectorAll('#category-list .category-item p');
+            categoryItems[0].textContent = lang['calendar_legend_combustible'];
+            categoryItems[1].textContent = lang['calendar_legend_noncombustible'];
+            categoryItems[2].textContent = lang['calendar_legend_resource'];
+            categoryItems[3].textContent = lang['calendar_legend_combustible'] === '可燃垃圾' ? '大型垃圾' : lang['calendar_legend_combustible'] === 'Burnable' ? 'Oversized Waste' : '粗大ごみ';
+            
+            const legends = document.querySelectorAll('#calendar .mt-6 > div span');
+            if(legends.length >= 3) {
+                legends[0].textContent = lang['calendar_legend_combustible'];
+                legends[1].textContent = lang['calendar_legend_noncombustible'];
+                legends[2].textContent = lang['calendar_legend_resource'];
+                legends[3].textContent = lang['calendar_legend_today'];
+            }
+            updateHomeSchedule(calculateSchedule(currentYear, currentMonth));
+        }
+
+        navButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                navButtons.forEach(btn => btn.classList.remove('active'));
+                tabContents.forEach(content => content.classList.remove('active'));
+                button.classList.add('active');
+                const targetId = button.getAttribute('data-target');
+                document.getElementById(targetId).classList.add('active');
+                if (targetId === 'search' && searchInput.value.trim()) handleSearch(searchInput.value);
+            });
+        });
+        
+        homeSearchInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); performHomeSearch(e.target.value); } });
+        homeSearchInput.addEventListener('blur', (e) => { if (e.target.value.trim()) performHomeSearch(e.target.value); });
+        searchInput.addEventListener('input', (e) => handleSearch(e.target.value));
+        document.querySelectorAll('.category-item').forEach(item => { item.addEventListener('click', () => { showCategoryDetail(item.getAttribute('data-category')); }); });
+        
+        langButton.addEventListener('click', () => langModal.classList.remove('hidden'));
+        closeLangModalBtn.addEventListener('click', () => langModal.classList.add('hidden'));
+        langOptions.forEach(option => {
+            option.addEventListener('click', (e) => {
+                const newLang = e.currentTarget.getAttribute('data-lang');
+                if (newLang) {
+                    currentLang = newLang;
+                    updateUIStrings();
+                    updateCalendar();
+                    langModal.classList.add('hidden');
+                    if (document.getElementById('search').classList.contains('active') && searchInput.value.trim()) handleSearch(searchInput.value);
+                }
+            });
+        });
+
+        aiVisionBtn.addEventListener('click', () => imageUpload.click());
+        imageUpload.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) handleImageSearchWithAPI(file);
+        });
+        closeGeminiModalBtn.addEventListener('click', hideGeminiModal);
+
+        prevMonthBtn.addEventListener('click', () => { currentMonth--; if (currentMonth < 0) { currentMonth = 11; currentYear--; } updateCalendar(); });
+        nextMonthBtn.addEventListener('click', () => { currentMonth++; if (currentMonth > 11) { currentMonth = 0; currentYear++; } updateCalendar(); });
+
+        function updateCalendar() {
+            const schedule = calculateSchedule(currentYear, currentMonth);
+            renderCalendar(currentYear, currentMonth, schedule);
+            updateHomeSchedule(schedule); 
+            checkAndShowReminder(); 
+        }
+
+        updateUIStrings();
+        updateCalendar(); 
+    </script>
+</body>
+</html>
